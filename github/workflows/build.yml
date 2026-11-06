@@ -1,0 +1,64 @@
+name: Build EXE
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Prepare project
+        shell: bash
+        run: |
+          mkdir app && cd app
+          mkdir game
+          cp ../SwordKingOut.html game/index.html
+          cat > package.json <<'JSON'
+          {
+            "name": "sword-king-out",
+            "version": "1.0.0",
+            "description": "Sword King Out Lite",
+            "main": "main.js",
+            "build": {
+              "appId": "com.local.swordkingout",
+              "productName": "SwordKingOut",
+              "files": ["main.js", "game/**/*"],
+              "win": { "target": "portable" }
+            }
+          }
+          JSON
+          cat > main.js <<'JS'
+          const { app, BrowserWindow } = require('electron');
+          const path = require('path');
+          function createWindow() {
+            const win = new BrowserWindow({
+              width: 1280, height: 720, backgroundColor: '#0b0e14',
+              autoHideMenuBar: true, title: 'Sword King Out',
+              webPreferences: { contextIsolation: true, nodeIntegration: false }
+            });
+            win.setMenuBarVisibility(false);
+            win.loadFile(path.join(__dirname, 'game', 'index.html'));
+            win.webContents.on('before-input-event', (e, input) => {
+              if (input.type === 'keyDown' && input.key === 'F11') {
+                win.setFullScreen(!win.isFullScreen());
+                e.preventDefault();
+              }
+            });
+          }
+          app.whenReady().then(createWindow);
+          app.on('window-all-closed', () => app.quit());
+          JS
+      - name: Build
+        working-directory: app
+        run: |
+          npm install --save-dev electron@33 electron-builder@25
+          npx electron-builder --win portable
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SwordKingOut-exe
+          path: app/dist/*.exe
